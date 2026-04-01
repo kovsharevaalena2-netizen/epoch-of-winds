@@ -11,7 +11,7 @@ export default function TeamPage() {
   const params = useParams();
   const teamName = params.id as TeamName;
   
-  const { team, loading, submitAnswer, buyBuilding, destroyWall, sendTrade } = useTeam(teamName);
+  const { team, loading, error, submitAnswer, buyBuilding, destroyWall, sendTrade } = useTeam(teamName);
   const { currentCard, teams } = useGame();
   
   const [showShop, setShowShop] = useState(false);
@@ -31,10 +31,31 @@ export default function TeamPage() {
     );
   }
 
-  if (loading || !team) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
         <div className="text-white text-2xl">Загрузка...</div>
+      </div>
+    );
+  }
+
+  if (error || !team) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div className="text-center">
+          <div className="text-white text-2xl mb-4">
+            {error || 'Команда не найдена'}
+          </div>
+          <div className="text-gray-400 mb-6">
+            Пожалуйста, перейдите на панель мастера и нажмите кнопку "Старт" для инициализации игры.
+          </div>
+          <a
+            href="/master"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg inline-block"
+          >
+            Перейти к панели мастера
+          </a>
+        </div>
       </div>
     );
   }

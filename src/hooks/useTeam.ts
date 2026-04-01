@@ -5,6 +5,7 @@ import { Team, Answer } from '@/types/game';
 export function useTeam(teamName: string) {
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTeam();
@@ -36,16 +37,27 @@ export function useTeam(teamName: string) {
   async function fetchTeam() {
     try {
       setLoading(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('teams')
         .select('*')
         .eq('name', teamName)
         .single();
 
-      if (error) throw error;
-      setTeam(data);
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Команда не найдена
+          setError('Команда не найдена. Пожалуйста, инициализируйте игру через панель мастера.');
+        } else {
+          throw error;
+        }
+      } else {
+        setTeam(data);
+      }
     } catch (err) {
       console.error('Error fetching team:', err);
+      setError('Ошибка при загрузке данных команды');
     } finally {
       setLoading(false);
     }
@@ -129,6 +141,7 @@ export function useTeam(teamName: string) {
   return {
     team,
     loading,
+    error,
     submitAnswer,
     buyBuilding,
     destroyWall,
