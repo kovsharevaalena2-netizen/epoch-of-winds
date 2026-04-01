@@ -75,28 +75,38 @@ export function useGame() {
         .limit(1)
         .single();
 
-      if (gameError) throw gameError;
-      setGame(gameData);
+      if (gameError) {
+        if (gameError.code === 'PGRST116') {
+          // Нет активной игры - это нормально
+          setGame(null);
+          setTeams([]);
+          setCurrentCard(null);
+        } else {
+          throw gameError;
+        }
+      } else {
+        setGame(gameData);
 
-      if (gameData) {
-        // Получаем команды
-        const { data: teamsData, error: teamsError } = await supabase
-          .from('teams')
-          .select('*')
-          .eq('game_id', gameData.id);
-
-        if (teamsError) throw teamsError;
-        setTeams(teamsData || []);
-
-        // Получаем текущую карточку
-        if (gameData.current_card_id) {
-          const { data: cardData } = await supabase
-            .from('cards')
+        if (gameData) {
+          // Получаем команды
+          const { data: teamsData, error: teamsError } = await supabase
+            .from('teams')
             .select('*')
-            .eq('id', gameData.current_card_id)
-            .single();
+            .eq('game_id', gameData.id);
 
-          setCurrentCard(cardData);
+          if (teamsError) throw teamsError;
+          setTeams(teamsData || []);
+
+          // Получаем текущую карточку
+          if (gameData.current_card_id) {
+            const { data: cardData } = await supabase
+              .from('cards')
+              .select('*')
+              .eq('id', gameData.current_card_id)
+              .single();
+
+            setCurrentCard(cardData);
+          }
         }
       }
     } catch (err) {

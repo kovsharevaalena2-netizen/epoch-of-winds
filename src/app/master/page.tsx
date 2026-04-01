@@ -6,22 +6,11 @@ import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS, TeamName } from '@/types/g
 import { Play, Pause, RotateCcw, Plus, Minus, ArrowRight, Scroll, Crown } from 'lucide-react';
 
 export default function MasterPage() {
-  const { game, teams, currentCard, refetch } = useGame();
+  const { game, teams, currentCard, refetch, loading } = useGame();
   
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [showCardSelector, setShowCardSelector] = useState(false);
   const [cards, setCards] = useState<any[]>([]);
-
-  // Загрузка карточек
-  const fetchCards = async () => {
-    try {
-      const response = await fetch('/api/cards');
-      const data = await response.json();
-      setCards(data.cards || []);
-    } catch (error) {
-      console.error('Error fetching cards:', error);
-    }
-  };
 
   const handleStartGame = async () => {
     try {
@@ -33,6 +22,16 @@ export default function MasterPage() {
     } catch (error) {
       alert('Ошибка при инициализации игры');
       console.error(error);
+    }
+  };
+
+  const fetchCards = async () => {
+    try {
+      const response = await fetch('/api/cards');
+      const data = await response.json();
+      setCards(data.cards || []);
+    } catch (error) {
+      console.error('Error fetching cards:', error);
     }
   };
 
@@ -112,6 +111,36 @@ export default function MasterPage() {
       console.error('Error modifying resource:', error);
     }
   };
+
+  // Если игры нет, показываем кнопку старта
+  if (!game && !loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-purple-900 p-4 flex items-center justify-center">
+        <div className="max-w-md w-full text-center">
+          <div className="bg-purple-800/50 border border-purple-600 rounded-xl p-8">
+            <Crown className="text-yellow-400 mx-auto mb-4" size={64} />
+            <h1 className="text-3xl font-bold text-white mb-4">ПАНЕЛЬ МАГИСТРА</h1>
+            <p className="text-purple-200 mb-6">Игра не инициализирована</p>
+            <button 
+              onClick={handleStartGame}
+              className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg flex items-center justify-center gap-2 w-full"
+            >
+              <Play size={24} />
+              <span className="text-xl">НАЧАТЬ ИГРУ</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-purple-900 p-4 flex items-center justify-center">
+        <div className="text-white text-2xl">Загрузка...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-purple-900 p-4">
