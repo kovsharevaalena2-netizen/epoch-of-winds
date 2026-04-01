@@ -1,55 +1,72 @@
 'use client';
 
-import { useState } from 'react';
-import { useGame } from '@/hooks/useGame';
-import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS, TeamName } from '@/types/game';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS } from '@/types/game';
 import { Play, Pause, RotateCcw, Plus, Minus, ArrowRight, Scroll, Crown } from 'lucide-react';
 
 export default function MasterPage() {
-  const { game, teams, currentCard, refetch, loading } = useGame();
-  
+  const router = useRouter();
+  const [game, setGame] = useState<any>(null);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [currentCard, setCurrentCard] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [showCardSelector, setShowCardSelector] = useState(false);
   const [cards, setCards] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refetch();
-    setTimeout(() => setIsRefreshing(false), 500);
+  // Загрузка данных
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      console.log('Master: Загружаем данные...');
+      
+      // Получаем активную игру
+      const gameRes = await fetch('/api/game');
+      const gameData = await gameRes.json();
+      console.log('Master: Данные игры:', gameData);
+      
+      if (gameData.game) {
+        setGame(gameData.game);
+        setTeams(gameData.teams || []);
+        setCurrentCard(gameData.currentCard || null);
+      } else {
+        setGame(null);
+        setTeams([]);
+        setCurrentCard(null);
+      }
+    } catch (error) {
+      console.error('Master: Ошибка загрузки:', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadData();
+    // Обновляем каждые 10 секунд
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleStartGame = async () => {
     try {
-      console.log('Начинаем инициализацию игры...');
+      console.log('Master: Начинаем инициализацию игры...');
       const response = await fetch('/api/game/init', { method: 'POST' });
-      console.log('Ответ от API:', response.status, response.statusText);
-      
       const data = await response.json();
-      console.log('Данные ответа:', data);
+      console.log('Master: Ответ:', data);
       
       if (response.ok) {
-        // Ждем немного, чтобы данные сохранились в базе
-        await new Promise(resolve => setTimeout(resolve, 500));
-        // Обновляем данные игры
-        await refetch();
-        alert('Игра инициализирована! Теперь команды могут войти в свои кабинеты.');
+        alert('Игра инициализирована! Загружаем данные...');
+        // Перезагружаем страницу для получения новых данных
+        window.location.reload();
       } else {
         alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
       }
     } catch (error) {
-      console.error('Ошибка при инициализации игры:', error);
+      console.error('Master: Ошибка:', error);
       alert(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
-    }
-  };
-
-  const fetchCards = async () => {
-    try {
-      const response = await fetch('/api/cards');
-      const data = await response.json();
-      setCards(data.cards || []);
-    } catch (error) {
-      console.error('Error fetching cards:', error);
     }
   };
 
@@ -64,7 +81,7 @@ export default function MasterPage() {
       });
       
       if (response.ok) {
-        await refetch();
+        await loadData();
         alert('Ход рассчитан!');
       }
     } catch (error) {
@@ -84,7 +101,7 @@ export default function MasterPage() {
       });
       
       if (response.ok) {
-        await refetch();
+        await loadData();
         alert('Эпоха переключена!');
       }
     } catch (error) {
@@ -104,7 +121,7 @@ export default function MasterPage() {
       });
       
       if (response.ok) {
-        await refetch();
+        await loadData();
         setShowCardSelector(false);
         alert('Карточка отправлена!');
       }
@@ -123,10 +140,20 @@ export default function MasterPage() {
       });
       
       if (response.ok) {
-        await refetch();
+        await loadData();
       }
     } catch (error) {
       console.error('Error modifying resource:', error);
+    }
+  };
+
+  const fetchCards = async () => {
+    try {
+      const response = await fetch('/api/cards');
+      const data = await response.json();
+      setCards(data.cards || []);
+    } catch (error) {
+      console.error('Error fetching cards:', error);
     }
   };
 
@@ -174,7 +201,10 @@ export default function MasterPage() {
               </div>
             </div>
             <button
-              onClick={handleRefresh}
+              onClick={() => {
+                setIsRefreshing(true);
+                loadData().then(() => setIsRefreshing(false));
+              }}
               disabled={isRefreshing}
               className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white px-4 py-2 rounded-lg flex items-center gap-2"
             >
@@ -217,11 +247,14 @@ export default function MasterPage() {
             </button>
             
             <button 
-              onClick={() => fetch('/api/game', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ is_active: false }),
-              }).then(refetch)}
+              onClick={async () => {
+                await fetch('/api/game', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ is_active: false }),
+                });
+                await loadData();
+              }}
               className="bg-yellow-600 hover:bg-yellow-700 text-white p-4 rounded-lg flex items-center justify-center gap-2"
             >
               <Pause size={20} />
@@ -251,10 +284,10 @@ export default function MasterPage() {
           <h2 className="text-2xl font-bold text-white mb-4">Статистика команд</h2>
           <div className="space-y-4">
             {teams.map((team) => (
-              <div key={team.id} className={`${TEAM_COLORS[team.name]}/20 border ${TEAM_COLORS[team.name]}/50 rounded-lg p-4`}>
+              <div key={team.id} className={`${TEAM_COLORS[team.name as keyof typeof TEAM_COLORS]}/20 border ${TEAM_COLORS[team.name as keyof typeof TEAM_COLORS]}/50 rounded-lg p-4`}>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">{TEAM_ICONS[team.name]}</div>
+                    <div className="text-3xl">{TEAM_ICONS[team.name as keyof typeof TEAM_ICONS]}</div>
                     <div>
                       <div className="text-white font-bold text-lg">{team.display_name}</div>
                       <div className="text-white/70 text-sm">Ответ: {team.current_answer || 'Не выбран'}</div>
@@ -317,7 +350,7 @@ export default function MasterPage() {
             {teams.map((team) => (
               <div key={team.id} className="bg-slate-700/50 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="text-2xl">{TEAM_ICONS[team.name]}</div>
+                  <div className="text-2xl">{TEAM_ICONS[team.name as keyof typeof TEAM_ICONS]}</div>
                   <div className="text-white font-bold">{team.display_name}</div>
                 </div>
                 

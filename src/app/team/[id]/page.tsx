@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { useTeam } from '@/hooks/useTeam';
-import { useGame } from '@/hooks/useGame';
 import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS, TeamName, Answer } from '@/types/game';
 import { Coins, Trees, Mountain, Scroll, Store, ArrowRightLeft, Hammer, RotateCcw } from 'lucide-react';
 
@@ -11,8 +9,12 @@ export default function TeamPage() {
   const params = useParams();
   const teamName = params.id as TeamName;
   
-  const { team, loading, error, submitAnswer, buyBuilding, destroyWall, sendTrade, refetch } = useTeam(teamName);
-  const { currentCard, teams } = useGame();
+  const [team, setTeam] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentCard, setCurrentCard] = useState<any>(null);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [showShop, setShowShop] = useState(false);
   const [showTrade, setShowTrade] = useState(false);
@@ -21,12 +23,166 @@ export default function TeamPage() {
   const [tradeAmount, setTradeAmount] = useState('1');
   const [tradeResource, setTradeResource] = useState('gold');
   const [tradeToTeamId, setTradeToTeamId] = useState('');
-  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Загрузка данных
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log(`Team ${teamName}: Загружаем данные...`);
+      
+      // Получаем данные команды из данных игры
+      const gameRes = await fetch('/api/game');
+      if (gameRes.ok) {
+        const gameData = await gameRes.json();
+        const teamData = gameData.teams?.find((t: any) => t.name === teamName);
+        if (teamData) {
+          setTeam(teamData);
+          setCurrentCard(gameData.currentCard || null);
+          setTeams(gameData.teams || []);
+        } else {
+          setError('Команда не найдена. Пожалуйста, инициализируйте игру через панель мастера.');
+        }
+      } else {
+        setError('Ошибка при загрузке данных игры');
+      }
+      
+    } catch (err) {
+      console.error(`Team ${teamName}: Ошибка загрузки:`, err);
+      setError('Ошибка при загрузке данных команды');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // Обновляем каждые 10 секунд
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
+  }, [teamName]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refetch();
+    await loadData();
     setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  const handleAnswer = async (answer: Answer) => {
+    setSelectedAnswer(answer);
+    try {
+      const response = await fetch('/api/teams/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: team.id, answer }),
+      });
+      
+      if (response.ok) {
+        alert('Ответ отправлен!');
+        await loadData();
+      } else {
+        const data = await response.json();
+        alert(`Ошибка: ${data.error}`);
+      }
+    } catch (error) {
+      alert('Ошибка при отправке ответа');
+      console.error(error);
+    }
+  };
+
+  const handleBuyBuilding = async (buildingType: string) => {
+    try {
+      const prices: Record<string, Record<string, number>> = {
+        wall: { gold: 2, wood: 0, stone: 0, blueprints: 0 },
+        chizhik: { gold: 3, wood: 0, stone: 0, blueprints: 0 },
+        pyaterochka: { gold: 5, wood: 0, stone: 0, blueprints: 0 },
+        perekrestok: { gold: 7, wood: 0, stone: 0, blueprints: 0 },
+        windmill: { gold: 0, wood: 1, stone: 1, blueprints: 1 },
+      };
+
+      const price = prices[buildingType];
+      if (!price) return;
+
+      const updates: any = {};
+      for (const [resource, amount] of Object.entries(price)) {
+        if (amount > 0) {
+          updates[resource] = team[resource] - amount;
+        }
+      }
+      updates[buildingType] = (team[buildingType] || 0) + 1;
+
+      const response = await fetch(`/api/teams/by-id/${team.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (response.ok) {
+        alert('Здание куплено!');
+        await loadData();
+      } else {
+        const data = await response.json();
+        alert(`Ошибка: ${data.error || 'Недостаточно ресурсов'}`);
+      }
+    } catch (error) {
+      alert('Ошибка при покупке');
+      console.error(error);
+    }
+  };
+
+  const handleDestroyWall = async () => {
+    try {
+      const response = await fetch(`/api/teams/by-id/${team.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walls: team.walls - 1,
+          wood: team.wood + 1,
+        }),
+      });
+
+      if (response.ok) {
+        alert('Стена разрушена!');
+        await loadData();
+      }
+    } catch (error) {
+      alert('Ошибка при разрушении стены');
+      console.error(error);
+    }
+  };
+
+  const handleSendTrade = async () => {
+    if (!tradeToTeamId || !tradeAmount) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/trade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from_team_id: team.id,
+          to_team_id: tradeToTeamId,
+          resource_type: tradeResource,
+          amount: parseInt(tradeAmount, 10),
+        }),
+      });
+
+      if (response.ok) {
+        alert('Ресурсы отправлены!');
+        setShowTrade(false);
+        setTradeToTeamId('');
+        setTradeAmount('1');
+        await loadData();
+      } else {
+        const data = await response.json();
+        alert(`Ошибка: ${data.error}`);
+      }
+    } catch (error) {
+      alert('Ошибка при отправке ресурсов');
+      console.error(error);
+    }
   };
 
   // Проверка валидности имени команды
@@ -56,8 +212,8 @@ export default function TeamPage() {
           <div className="text-gray-400 mb-6">
             Пожалуйста, перейдите на панель мастера и нажмите кнопку "Старт" для инициализации игры.
           </div>
-          <a
-            href="/master"
+          <a 
+            href="/master" 
             className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg inline-block"
           >
             Перейти к панели мастера
@@ -66,55 +222,6 @@ export default function TeamPage() {
       </div>
     );
   }
-
-  const handleAnswer = async (answer: Answer) => {
-    setSelectedAnswer(answer);
-    try {
-      await submitAnswer(answer);
-      alert('Ответ отправлен!');
-    } catch (error) {
-      alert('Ошибка при отправке ответа');
-      console.error(error);
-    }
-  };
-
-  const handleBuyBuilding = async (buildingType: string) => {
-    try {
-      await buyBuilding(buildingType);
-      alert('Здание куплено!');
-    } catch (error) {
-      alert('Недостаточно ресурсов');
-      console.error(error);
-    }
-  };
-
-  const handleDestroyWall = async () => {
-    try {
-      await destroyWall();
-      alert('Стена разрушена!');
-    } catch (error) {
-      alert('Ошибка при разрушении стены');
-      console.error(error);
-    }
-  };
-
-  const handleSendTrade = async () => {
-    if (!tradeToTeamId || !tradeAmount) {
-      alert('Заполните все поля');
-      return;
-    }
-
-    try {
-      await sendTrade(tradeToTeamId, tradeResource, parseInt(tradeAmount, 10));
-      alert('Ресурсы отправлены!');
-      setShowTrade(false);
-      setTradeToTeamId('');
-      setTradeAmount('1');
-    } catch (error) {
-      alert('Ошибка при отправке ресурсов');
-      console.error(error);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4">
@@ -201,25 +308,25 @@ export default function TeamPage() {
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">🐦</div>
               <div className="text-white font-semibold">Чижик</div>
-              <div className="text-2xl font-bold text-white">{team.chizhik}</div>
+              <div className="text-2xl font-bold text-white">{team.chizhik || 0}</div>
             </div>
             
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">5️⃣</div>
               <div className="text-white font-semibold">Пятерочка</div>
-              <div className="text-2xl font-bold text-white">{team.pyaterochka}</div>
+              <div className="text-2xl font-bold text-white">{team.pyaterochka || 0}</div>
             </div>
             
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">➕</div>
               <div className="text-white font-semibold">Перекресток</div>
-              <div className="text-2xl font-bold text-white">{team.perekrestok}</div>
+              <div className="text-2xl font-bold text-white">{team.perekrestok || 0}</div>
             </div>
             
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">🌬️</div>
               <div className="text-white font-semibold">Мельница</div>
-              <div className="text-2xl font-bold text-white">{team.windmill}</div>
+              <div className="text-2xl font-bold text-white">{team.windmill || 0}</div>
             </div>
           </div>
         </div>
@@ -444,15 +551,15 @@ export default function TeamPage() {
               <div className="space-y-4">
                 <div>
                   <label className="text-white font-semibold mb-2 block">Кому отправить:</label>
-                  <select
+                  <select 
                     value={tradeToTeamId}
                     onChange={(e) => setTradeToTeamId(e.target.value)}
                     className="w-full bg-slate-700 text-white p-3 rounded-lg"
                   >
                     <option value="">Выберите команду...</option>
                     {teams
-                      .filter(t => t.name !== teamName)
-                      .map(t => (
+                      .filter((t: any) => t.name !== teamName)
+                      .map((t: any) => (
                         <option key={t.id} value={t.id}>{TEAM_DISPLAY_NAMES[t.name as TeamName]}</option>
                       ))}
                   </select>
