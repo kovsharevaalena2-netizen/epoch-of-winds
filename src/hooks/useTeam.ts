@@ -1,0 +1,138 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Team, Answer } from '@/types/game';
+
+export function useTeam(teamName: string) {
+  const [team, setTeam] = useState<Team | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTeam();
+
+    // Подписка на изменения команды
+    const subscription = supabase
+      .channel(`team-${teamName}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'teams',
+          filter: `name=eq.${teamName}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            setTeam(payload.new as Team);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [teamName]);
+
+  async function fetchTeam() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('name', teamName)
+        .single();
+
+      if (error) throw error;
+      setTeam(data);
+    } catch (err) {
+      console.error('Error fetching team:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitAnswer(answer: Answer) {
+    if (!team) return;
+
+    const { error } = await supabase
+      .from('teams')
+      .update({ current_answer: answer })
+      .eq('id', team.id);
+
+    if (error) throw error;
+  }
+
+  async function buyBuilding(buildingType: string) {
+    if (!team) return;
+
+    const prices: Record<string, Record<string, number>> = {
+      wall: { gold: 2, wood: 0, stone: 0, blueprints: 0 },
+      chizhik: { gold: 3, wood: 0, stone: 0, blueprints: 0 },
+      pyaterochka: { gold: 5, wood: 0, stone: 0, blueprints: 0 },
+      perekrestok: { gold: 7, wood: 0, stone: 0, blueprints: 0 },
+      windmill: { gold: 0, wood: 1, stone: 1, blueprints: 1 },
+    };
+
+    const price = prices[buildingType];
+    if (!price) return;
+
+    const updates: any = {};
+    for (const [resource, amount] of Object.entries(price)) {
+      if (amount > 0) {
+        updates[resource] = (team[resource as keyof Team] as number) - amount;
+      }
+    }
+    updates[buildingType] = (team[buildingType as keyof Team] as number) + 1;
+
+    const { error } = await supabase
+      .from('teams')
+      .update(updates)
+      .eq('id', team.id);
+
+    if (error) throw error;
+  }
+
+  async function destroyWall() {
+    if (!team || team.walls <= 0) return;
+
+    const { error } = await supabase
+      .from('teams')
+      .update({
+        walls: team.walls - 1,
+        wood: team.wood + 1,
+      })
+      .eq('id', team.id);
+
+    if (error) throw error;
+  }
+
+  async function sendTrade(toTeamId: string, resourceType: string, amount: number) {
+    if (!team) return;
+
+    const response = await fetch('/api/trade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_team_id: team.id,
+        to_team_id: toTeamId,
+        resource_type: resourceType,
+        amount: Number(amount),
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Trade failed');
+    }
+  }
+
+  return {
+    team,
+    loading,
+    submitAnswer,
+    buyBuilding,
+    destroyWall,
+    sendTrade,
+    refetch: fetchTeam,
+  };
+}

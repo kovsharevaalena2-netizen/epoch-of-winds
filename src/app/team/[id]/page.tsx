@@ -1,21 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useGameStore } from '@/store/gameStore';
-import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS, TeamName } from '@/types/game';
-import { Coins, Trees, Mountain, Scroll, MapPin, Store, ArrowRightLeft, Hammer } from 'lucide-react';
+import { useTeam } from '@/hooks/useTeam';
+import { useGame } from '@/hooks/useGame';
+import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS, TeamName, Answer } from '@/types/game';
+import { Coins, Trees, Mountain, Scroll, Store, ArrowRightLeft, Hammer } from 'lucide-react';
 
 export default function TeamPage() {
   const params = useParams();
   const teamName = params.id as TeamName;
   
-  const { teams, getTeamByName, isLoading } = useGameStore();
-  const team = getTeamByName(teamName);
+  const { team, loading, submitAnswer, buyBuilding, destroyWall, sendTrade } = useTeam(teamName);
+  const { currentCard, teams } = useGame();
   
   const [showShop, setShowShop] = useState(false);
   const [showTrade, setShowTrade] = useState(false);
   const [showCard, setShowCard] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState<Answer | null>(null);
+  const [tradeAmount, setTradeAmount] = useState('1');
+  const [tradeResource, setTradeResource] = useState('gold');
+  const [tradeToTeamId, setTradeToTeamId] = useState('');
 
   // Проверка валидности имени команды
   if (!['north', 'south', 'east'].includes(teamName)) {
@@ -26,7 +31,7 @@ export default function TeamPage() {
     );
   }
 
-  if (isLoading) {
+  if (loading || !team) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
         <div className="text-white text-2xl">Загрузка...</div>
@@ -34,25 +39,53 @@ export default function TeamPage() {
     );
   }
 
-  // Mock данные для демонстрации (будут заменены на реальные данные из Supabase)
-  const mockTeam = team || {
-    id: '1',
-    game_id: '1',
-    name: teamName,
-    display_name: TEAM_DISPLAY_NAMES[teamName],
-    gold: 10,
-    wood: teamName === 'north' ? 5 : 0,
-    stone: teamName === 'south' ? 5 : 0,
-    blueprints: teamName === 'east' ? 5 : 0,
-    steps: 0,
-    walls: 0,
-    chizhik: 0,
-    pyaterochka: 0,
-    perekrestok: 0,
-    windmill: 0,
-    current_answer: null,
-    created_at: '',
-    updated_at: '',
+  const handleAnswer = async (answer: Answer) => {
+    setSelectedAnswer(answer);
+    try {
+      await submitAnswer(answer);
+      alert('Ответ отправлен!');
+    } catch (error) {
+      alert('Ошибка при отправке ответа');
+      console.error(error);
+    }
+  };
+
+  const handleBuyBuilding = async (buildingType: string) => {
+    try {
+      await buyBuilding(buildingType);
+      alert('Здание куплено!');
+    } catch (error) {
+      alert('Недостаточно ресурсов');
+      console.error(error);
+    }
+  };
+
+  const handleDestroyWall = async () => {
+    try {
+      await destroyWall();
+      alert('Стена разрушена!');
+    } catch (error) {
+      alert('Ошибка при разрушении стены');
+      console.error(error);
+    }
+  };
+
+  const handleSendTrade = async () => {
+    if (!tradeToTeamId || !tradeAmount) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    try {
+      await sendTrade(tradeToTeamId, tradeResource, parseInt(tradeAmount, 10));
+      alert('Ресурсы отправлены!');
+      setShowTrade(false);
+      setTradeToTeamId('');
+      setTradeAmount('1');
+    } catch (error) {
+      alert('Ошибка при отправке ресурсов');
+      console.error(error);
+    }
   };
 
   return (
@@ -70,7 +103,7 @@ export default function TeamPage() {
             </div>
             <div className="text-right">
               <div className="text-white/80 text-sm">Прогресс</div>
-              <div className="text-4xl font-bold text-white">{mockTeam.steps} <span className="text-2xl">шагов</span></div>
+              <div className="text-4xl font-bold text-white">{team.steps} <span className="text-2xl">шагов</span></div>
             </div>
           </div>
         </div>
@@ -82,7 +115,7 @@ export default function TeamPage() {
               <Coins className="text-yellow-400" size={24} />
               <span className="text-yellow-400 font-semibold">Золото</span>
             </div>
-            <div className="text-3xl font-bold text-white">{mockTeam.gold}</div>
+            <div className="text-3xl font-bold text-white">{team.gold}</div>
           </div>
           
           <div className="bg-amber-700/20 border border-amber-600/50 rounded-xl p-4">
@@ -90,7 +123,7 @@ export default function TeamPage() {
               <Trees className="text-amber-500" size={24} />
               <span className="text-amber-500 font-semibold">Дерево</span>
             </div>
-            <div className="text-3xl font-bold text-white">{mockTeam.wood}</div>
+            <div className="text-3xl font-bold text-white">{team.wood}</div>
           </div>
           
           <div className="bg-gray-600/20 border border-gray-500/50 rounded-xl p-4">
@@ -98,7 +131,7 @@ export default function TeamPage() {
               <Mountain className="text-gray-400" size={24} />
               <span className="text-gray-400 font-semibold">Камень</span>
             </div>
-            <div className="text-3xl font-bold text-white">{mockTeam.stone}</div>
+            <div className="text-3xl font-bold text-white">{team.stone}</div>
           </div>
           
           <div className="bg-blue-600/20 border border-blue-500/50 rounded-xl p-4">
@@ -106,7 +139,7 @@ export default function TeamPage() {
               <Scroll className="text-blue-400" size={24} />
               <span className="text-blue-400 font-semibold">Чертежи</span>
             </div>
-            <div className="text-3xl font-bold text-white">{mockTeam.blueprints}</div>
+            <div className="text-3xl font-bold text-white">{team.blueprints}</div>
           </div>
         </div>
 
@@ -117,9 +150,12 @@ export default function TeamPage() {
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">🧱</div>
               <div className="text-white font-semibold">Стены</div>
-              <div className="text-2xl font-bold text-white">{mockTeam.walls}</div>
-              {mockTeam.walls > 0 && (
-                <button className="mt-2 text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded">
+              <div className="text-2xl font-bold text-white">{team.walls}</div>
+              {team.walls > 0 && (
+                <button 
+                  onClick={handleDestroyWall}
+                  className="mt-2 text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
+                >
                   Разрушить
                 </button>
               )}
@@ -128,25 +164,25 @@ export default function TeamPage() {
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">🐦</div>
               <div className="text-white font-semibold">Чижик</div>
-              <div className="text-2xl font-bold text-white">{mockTeam.chizhik}</div>
+              <div className="text-2xl font-bold text-white">{team.chizhik}</div>
             </div>
             
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">5️⃣</div>
               <div className="text-white font-semibold">Пятерочка</div>
-              <div className="text-2xl font-bold text-white">{mockTeam.pyaterochka}</div>
+              <div className="text-2xl font-bold text-white">{team.pyaterochka}</div>
             </div>
             
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">➕</div>
               <div className="text-white font-semibold">Перекресток</div>
-              <div className="text-2xl font-bold text-white">{mockTeam.perekrestok}</div>
+              <div className="text-2xl font-bold text-white">{team.perekrestok}</div>
             </div>
             
             <div className="bg-slate-700/50 rounded-lg p-4 text-center">
               <div className="text-3xl mb-2">🌬️</div>
               <div className="text-white font-semibold">Мельница</div>
-              <div className="text-2xl font-bold text-white">{mockTeam.windmill}</div>
+              <div className="text-2xl font-bold text-white">{team.windmill}</div>
             </div>
           </div>
         </div>
@@ -188,7 +224,7 @@ export default function TeamPage() {
         </div>
 
         {/* Зона для активной карточки */}
-        {showCard && (
+        {showCard && currentCard && (
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 animate-slide-in">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold text-white">Активная карточка</h2>
@@ -200,23 +236,40 @@ export default function TeamPage() {
               </button>
             </div>
             <div className="bg-slate-700/50 rounded-lg p-6">
-              <div className="text-purple-400 text-sm mb-2">Хроники</div>
-              <h3 className="text-xl font-bold text-white mb-4">Торговый путь</h3>
-              <p className="text-gray-300 mb-6">
-                Ваш караван встретил разбойников на торговом пути. Что вы сделаете?
-              </p>
+              <div className="text-purple-400 text-sm mb-2">
+                {currentCard.type === 'case' && 'Хроники'}
+                {currentCard.type === 'test' && 'Тайны'}
+                {currentCard.type === 'decree' && 'Указ'}
+              </div>
+              <h3 className="text-xl font-bold text-white mb-4">{currentCard.title}</h3>
+              <p className="text-gray-300 mb-6">{currentCard.description}</p>
               <div className="space-y-3">
-                <button className="w-full bg-slate-600 hover:bg-slate-500 text-white p-4 rounded-lg text-left transition-all">
+                <button 
+                  onClick={() => handleAnswer('A')}
+                  className={`w-full p-4 rounded-lg text-left transition-all ${
+                    selectedAnswer === 'A' ? 'bg-purple-600' : 'bg-slate-600 hover:bg-slate-500'
+                  } text-white`}
+                >
                   <span className="font-bold text-purple-400 mr-2">A.</span>
-                  Заплатить выкуп и продолжить путь
+                  {currentCard.option_a}
                 </button>
-                <button className="w-full bg-slate-600 hover:bg-slate-500 text-white p-4 rounded-lg text-left transition-all">
+                <button 
+                  onClick={() => handleAnswer('B')}
+                  className={`w-full p-4 rounded-lg text-left transition-all ${
+                    selectedAnswer === 'B' ? 'bg-purple-600' : 'bg-slate-600 hover:bg-slate-500'
+                  } text-white`}
+                >
                   <span className="font-bold text-purple-400 mr-2">B.</span>
-                  Сразиться с разбойниками
+                  {currentCard.option_b}
                 </button>
-                <button className="w-full bg-slate-600 hover:bg-slate-500 text-white p-4 rounded-lg text-left transition-all">
+                <button 
+                  onClick={() => handleAnswer('C')}
+                  className={`w-full p-4 rounded-lg text-left transition-all ${
+                    selectedAnswer === 'C' ? 'bg-purple-600' : 'bg-slate-600 hover:bg-slate-500'
+                  } text-white`}
+                >
                   <span className="font-bold text-purple-400 mr-2">C.</span>
-                  Обойти путь через горы
+                  {currentCard.option_c}
                 </button>
               </div>
             </div>
@@ -248,7 +301,10 @@ export default function TeamPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-yellow-400 font-bold">2 💰</div>
-                    <button className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    <button 
+                      onClick={() => handleBuyBuilding('wall')}
+                      className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                    >
                       Купить
                     </button>
                   </div>
@@ -264,7 +320,10 @@ export default function TeamPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-yellow-400 font-bold">3 💰</div>
-                    <button className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    <button 
+                      onClick={() => handleBuyBuilding('chizhik')}
+                      className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                    >
                       Купить
                     </button>
                   </div>
@@ -280,7 +339,10 @@ export default function TeamPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-yellow-400 font-bold">5 💰</div>
-                    <button className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    <button 
+                      onClick={() => handleBuyBuilding('pyaterochka')}
+                      className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                    >
                       Купить
                     </button>
                   </div>
@@ -296,7 +358,10 @@ export default function TeamPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-yellow-400 font-bold">7 💰</div>
-                    <button className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    <button 
+                      onClick={() => handleBuyBuilding('perekrestok')}
+                      className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                    >
                       Купить
                     </button>
                   </div>
@@ -312,7 +377,10 @@ export default function TeamPage() {
                   </div>
                   <div className="text-right">
                     <div className="text-amber-500 font-bold">1 🪵 1 🪨 1 📜</div>
-                    <button className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    <button 
+                      onClick={() => handleBuyBuilding('windmill')}
+                      className="mt-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
+                    >
                       Построить
                     </button>
                   </div>
@@ -339,20 +407,27 @@ export default function TeamPage() {
               <div className="space-y-4">
                 <div>
                   <label className="text-white font-semibold mb-2 block">Кому отправить:</label>
-                  <select className="w-full bg-slate-700 text-white p-3 rounded-lg">
+                  <select
+                    value={tradeToTeamId}
+                    onChange={(e) => setTradeToTeamId(e.target.value)}
+                    className="w-full bg-slate-700 text-white p-3 rounded-lg"
+                  >
                     <option value="">Выберите команду...</option>
-                    {['north', 'south', 'east']
-                      .filter(t => t !== teamName)
+                    {teams
+                      .filter(t => t.name !== teamName)
                       .map(t => (
-                        <option key={t} value={t}>{TEAM_DISPLAY_NAMES[t as TeamName]}</option>
+                        <option key={t.id} value={t.id}>{TEAM_DISPLAY_NAMES[t.name as TeamName]}</option>
                       ))}
                   </select>
                 </div>
                 
                 <div>
                   <label className="text-white font-semibold mb-2 block">Ресурс:</label>
-                  <select className="w-full bg-slate-700 text-white p-3 rounded-lg">
-                    <option value="">Выберите ресурс...</option>
+                  <select 
+                    value={tradeResource}
+                    onChange={(e) => setTradeResource(e.target.value)}
+                    className="w-full bg-slate-700 text-white p-3 rounded-lg"
+                  >
                     <option value="gold">💰 Золото</option>
                     <option value="wood">🪵 Дерево</option>
                     <option value="stone">🪨 Камень</option>
@@ -365,12 +440,16 @@ export default function TeamPage() {
                   <input
                     type="number"
                     min="1"
+                    value={tradeAmount}
+                    onChange={(e) => setTradeAmount(e.target.value)}
                     className="w-full bg-slate-700 text-white p-3 rounded-lg"
-                    placeholder="Введите количество"
                   />
                 </div>
                 
-                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold">
+                <button 
+                  onClick={handleSendTrade}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg font-bold"
+                >
                   Отправить
                 </button>
               </div>
