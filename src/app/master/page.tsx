@@ -11,6 +11,13 @@ export default function MasterPage() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [showCardSelector, setShowCardSelector] = useState(false);
   const [cards, setCards] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   const handleStartGame = async () => {
     try {
@@ -22,8 +29,11 @@ export default function MasterPage() {
       console.log('Данные ответа:', data);
       
       if (response.ok) {
+        // Ждем немного, чтобы данные сохранились в базе
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Обновляем данные игры
         await refetch();
-        alert('Игра инициализирована!');
+        alert('Игра инициализирована! Теперь команды могут войти в свои кабинеты.');
       } else {
         alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
       }
@@ -155,12 +165,22 @@ export default function MasterPage() {
       <div className="max-w-7xl mx-auto">
         {/* Заголовок */}
         <div className="bg-purple-800/50 border border-purple-600 rounded-xl p-6 mb-6">
-          <div className="flex items-center gap-4">
-            <Crown className="text-yellow-400" size={48} />
-            <div>
-              <h1 className="text-4xl font-bold text-white">ПАНЕЛЬ МАГИСТРА</h1>
-              <p className="text-purple-200">Управление игрой</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Crown className="text-yellow-400" size={48} />
+              <div>
+                <h1 className="text-4xl font-bold text-white">ПАНЕЛЬ МАГИСТРА</h1>
+                <p className="text-purple-200">Управление игрой</p>
+              </div>
             </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <RotateCcw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>Обновить</span>
+            </button>
           </div>
         </div>
 

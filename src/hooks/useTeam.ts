@@ -9,35 +9,13 @@ export function useTeam(teamName: string) {
 
   useEffect(() => {
     fetchTeam();
-
-    // Подписка на изменения команды
-    const subscription = supabase
-      .channel(`team-${teamName}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'teams',
-          filter: `name=eq.${teamName}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setTeam(payload.new as Team);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [teamName]);
 
   async function fetchTeam() {
     try {
       setLoading(true);
       setError(null);
+      console.log(`useTeam: Загружаем команду ${teamName}...`);
       
       const { data, error } = await supabase
         .from('teams')
@@ -45,9 +23,12 @@ export function useTeam(teamName: string) {
         .eq('name', teamName)
         .single();
 
+      console.log(`useTeam: Данные команды:`, data, 'Ошибка:', error);
+
       if (error) {
         if (error.code === 'PGRST116') {
           // Команда не найдена
+          console.log(`useTeam: Команда ${teamName} не найдена`);
           setError('Команда не найдена. Пожалуйста, инициализируйте игру через панель мастера.');
         } else {
           throw error;
@@ -56,7 +37,7 @@ export function useTeam(teamName: string) {
         setTeam(data);
       }
     } catch (err) {
-      console.error('Error fetching team:', err);
+      console.error(`useTeam: Ошибка загрузки команды ${teamName}:`, err);
       setError('Ошибка при загрузке данных команды');
     } finally {
       setLoading(false);
@@ -66,6 +47,7 @@ export function useTeam(teamName: string) {
   async function submitAnswer(answer: Answer) {
     if (!team) return;
 
+    console.log(`useTeam: Отправляем ответ ${answer} для команды ${team.id}`);
     const { error } = await supabase
       .from('teams')
       .update({ current_answer: answer })
@@ -96,6 +78,7 @@ export function useTeam(teamName: string) {
     }
     updates[buildingType] = (team[buildingType as keyof Team] as number) + 1;
 
+    console.log(`useTeam: Покупаем ${buildingType} для команды ${team.id}`);
     const { error } = await supabase
       .from('teams')
       .update(updates)
@@ -107,6 +90,7 @@ export function useTeam(teamName: string) {
   async function destroyWall() {
     if (!team || team.walls <= 0) return;
 
+    console.log(`useTeam: Разрушаем стену для команды ${team.id}`);
     const { error } = await supabase
       .from('teams')
       .update({
@@ -121,6 +105,7 @@ export function useTeam(teamName: string) {
   async function sendTrade(toTeamId: string, resourceType: string, amount: number) {
     if (!team) return;
 
+    console.log(`useTeam: Отправляем ${amount} ${resourceType} от ${team.id} к ${toTeamId}`);
     const response = await fetch('/api/trade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

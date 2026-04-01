@@ -5,13 +5,13 @@ import { useParams } from 'next/navigation';
 import { useTeam } from '@/hooks/useTeam';
 import { useGame } from '@/hooks/useGame';
 import { TEAM_DISPLAY_NAMES, TEAM_COLORS, TEAM_ICONS, TeamName, Answer } from '@/types/game';
-import { Coins, Trees, Mountain, Scroll, Store, ArrowRightLeft, Hammer } from 'lucide-react';
+import { Coins, Trees, Mountain, Scroll, Store, ArrowRightLeft, Hammer, RotateCcw } from 'lucide-react';
 
 export default function TeamPage() {
   const params = useParams();
   const teamName = params.id as TeamName;
   
-  const { team, loading, error, submitAnswer, buyBuilding, destroyWall, sendTrade } = useTeam(teamName);
+  const { team, loading, error, submitAnswer, buyBuilding, destroyWall, sendTrade, refetch } = useTeam(teamName);
   const { currentCard, teams } = useGame();
   
   const [showShop, setShowShop] = useState(false);
@@ -21,6 +21,13 @@ export default function TeamPage() {
   const [tradeAmount, setTradeAmount] = useState('1');
   const [tradeResource, setTradeResource] = useState('gold');
   const [tradeToTeamId, setTradeToTeamId] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   // Проверка валидности имени команды
   if (!['north', 'south', 'east'].includes(teamName)) {
@@ -122,9 +129,18 @@ export default function TeamPage() {
                 <p className="text-white/80">Дашборд команды</p>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-white/80 text-sm">Прогресс</div>
-              <div className="text-4xl font-bold text-white">{team.steps} <span className="text-2xl">шагов</span></div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-white/80 text-sm">Прогресс</div>
+                <div className="text-4xl font-bold text-white">{team.steps} <span className="text-2xl">шагов</span></div>
+              </div>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="bg-white/20 hover:bg-white/30 disabled:bg-white/10 text-white p-2 rounded-lg"
+              >
+                <RotateCcw size={24} className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
             </div>
           </div>
         </div>
