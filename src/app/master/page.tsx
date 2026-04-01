@@ -14,14 +14,22 @@ export default function MasterPage() {
 
   const handleStartGame = async () => {
     try {
+      console.log('Начинаем инициализацию игры...');
       const response = await fetch('/api/game/init', { method: 'POST' });
+      console.log('Ответ от API:', response.status, response.statusText);
+      
+      const data = await response.json();
+      console.log('Данные ответа:', data);
+      
       if (response.ok) {
         await refetch();
         alert('Игра инициализирована!');
+      } else {
+        alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
       }
     } catch (error) {
-      alert('Ошибка при инициализации игры');
-      console.error(error);
+      console.error('Ошибка при инициализации игры:', error);
+      alert(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
     }
   };
 
