@@ -235,7 +235,7 @@ export default function BoardPage() {
             </div>
             <div className="flex items-center gap-3">
               <Trophy className="text-yellow-400" size={20} />
-              <span className="text-gray-300">Победа: >150 шагов суммарно</span>
+              <span className="text-gray-300">Победа: более 150 шагов суммарно</span>
             </div>
           </div>
         </div>
