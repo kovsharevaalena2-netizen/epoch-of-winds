@@ -11,6 +11,14 @@ export function useGame() {
 
   useEffect(() => {
     fetchGameData();
+    // Периодическое обновление каждые 10 секунд
+    const interval = setInterval(() => {
+      fetchGameData();
+    }, 10000);
+    
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   async function fetchGameData() {

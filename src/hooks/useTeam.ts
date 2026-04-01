@@ -9,6 +9,14 @@ export function useTeam(teamName: string) {
 
   useEffect(() => {
     fetchTeam();
+    // Периодическое обновление каждые 10 секунд
+    const interval = setInterval(() => {
+      fetchTeam();
+    }, 10000);
+    
+    return () => {
+      clearInterval(interval);
+    };
   }, [teamName]);
 
   async function fetchTeam() {
